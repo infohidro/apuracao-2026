@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js"],
       "port": 3026
+    },
+    {
+      "name": "backtest",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/ver-backtest.js"],
+      "port": 3027
     }
   ]
 }
