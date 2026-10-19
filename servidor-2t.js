@@ -5,7 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { lerArquivoTse, num } = require('./projecao');
-const { carregarSecoes } = require('./lib/secoes');
+const { carregarSecoes, arquivoSecoes } = require('./lib/secoes');
 const { projetarPA, projetarMudanca, desfecho } = require('./lib/modelos');
 const { secoesRecebidas, estadoUfAoVivo, saldoUf, baseUf, curvaRestante } = require('./lib/ao-vivo');
 const { abrirLeituras } = require('./lib/leituras');
@@ -197,8 +197,8 @@ async function main() {
   const raiz = __dirname;
   const eleicao = process.env.ELEICAO || '6258';
   const escolha = escolherMetodo(raiz);
-  const anteriorArq = process.env.ANTERIOR || path.join(raiz, 'data', 'secoes', '2026-1t.jsonl');
-  const anteriores = fs.existsSync(anteriorArq) ? await carregarSecoes(anteriorArq) : null;
+  const anteriorArq = process.env.ANTERIOR || arquivoSecoes(raiz, '2026-1t');
+  const anteriores = anteriorArq && fs.existsSync(anteriorArq) ? await carregarSecoes(anteriorArq) : null;
   if (!anteriores) console.log('Sem o 1º turno por seção: comparação por estado e método de mudança desativados');
   const config = {
     eleicao, pleito: process.env.PLEITO || '3221',

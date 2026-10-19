@@ -2,7 +2,7 @@
 // Reprisa a apuração na ordem real de chegada das seções e grava data/backtest/{caso}.json.
 const fs = require('fs');
 const path = require('path');
-const { carregarSecoes } = require('../lib/secoes');
+const { carregarSecoes, arquivoSecoes } = require('../lib/secoes');
 const { reprisar } = require('../lib/reprise');
 
 const DADOS = path.join(__dirname, '..', 'data');
@@ -16,8 +16,14 @@ async function main() {
   const caso = process.argv[2];
   const cfg = CASOS[caso];
   if (!cfg) throw new Error('casos: ' + Object.keys(CASOS).join(', '));
-  const atuais = await carregarSecoes(path.join(DADOS, 'secoes', cfg.atuais + '.jsonl'));
-  const anteriores = cfg.anteriores ? await carregarSecoes(path.join(DADOS, 'secoes', cfg.anteriores + '.jsonl')) : null;
+  const raiz = path.join(__dirname, '..');
+  const abrir = (nome) => {
+    const arq = arquivoSecoes(raiz, nome);
+    if (!arq) throw new Error(`faltam as seções de ${nome}: rode scripts/baixar-bweb.js e scripts/extrair-bweb.js`);
+    return carregarSecoes(arq);
+  };
+  const atuais = await abrir(cfg.atuais);
+  const anteriores = cfg.anteriores ? await abrir(cfg.anteriores) : null;
   const candidatos = cfg.candidatos ?? [...new Set([...atuais.values()].flatMap((s) => Object.keys(s.v)))];
 
   const res = { caso, titulo: cfg.titulo, ...reprisar(atuais, anteriores, candidatos, 1) };
