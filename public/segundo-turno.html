@@ -80,7 +80,7 @@ function desenhar(p) {
     d.className = 'num';
     const b = document.createElement('b');
     b.style.color = c.cor;
-    b.textContent = `${fmt(c.pctProjetado, 2)}%`;
+    b.textContent = c.pctProjetado === null ? '–' : `${fmt(c.pctProjetado, 2)}%`;
     const s = document.createElement('span');
     s.textContent = `${c.nome} · projeção (agora ${fmt(c.pct, 2)}%, ${Math.round(c.votos).toLocaleString('pt-BR')} votos)`;
     d.append(b, s);

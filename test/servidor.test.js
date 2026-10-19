@@ -51,6 +51,17 @@ test('mantém a última leitura boa de uma UF que passou a falhar', async () => 
   assert.strictEqual(lula.votos, 20 + 30); // soma das UFs, com PR da primeira leitura
 });
 
+test('sem votos não mostra projeção', async () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'srv-')), 'l.jsonl');
+  const buscar = tseFalso((url) => (url.includes('-cs.json') ? cs(url.match(/config\/(\w\w)\//)[1]) : tse(url.match(/dados\/(\w\w)\//)[1], 0, 0)));
+  const s = criarServidor(config(f), buscar);
+  await s.atualizar();
+  for (const c of s.panorama().candidatos) {
+    assert.strictEqual(c.pctProjetado, null);
+    assert.strictEqual(c.votosProjetados, null);
+  }
+});
+
 test('reinício recupera o histórico sem duplicar pontos', async () => {
   const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'srv-')), 'l.jsonl');
   const buscar = tseFalso((url) => (url.includes('-cs.json') ? cs(url.match(/config\/(\w\w)\//)[1]) : tse(url.match(/dados\/(\w\w)\//)[1], 40, 60)));

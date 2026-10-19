@@ -148,8 +148,10 @@ function criarServidor(config, buscar = fetch) {
       geradoTse, lidoEm: new Date().toISOString(), pctSecoes, metodo, desfecho: textoDesfecho,
       candidatos: candidatos.map((c, i) => ({
         nr: c, nome: nomes[c]?.nome ?? c, partido: nomes[c]?.partido ?? '', cor: CORES[c] ?? EXTRAS[i % EXTRAS.length],
-        votos: votosAtuais[c], pct: pctAtual[c], votosProjetados: projecao.votos[c], pctProjetado: projecao.pct[c],
-      })).sort((a, b) => b.pctProjetado - a.pctProjetado),
+        // sem votos não há projeção: só o 1º turno redistribuído, que não deve aparecer como previsão
+        votos: votosAtuais[c], pct: pctAtual[c],
+        votosProjetados: validos > 0 ? projecao.votos[c] : null, pctProjetado: validos > 0 ? projecao.pct[c] : null,
+      })).sort((a, b) => (b.pctProjetado ?? 0) - (a.pctProjetado ?? 0) || a.nr.localeCompare(b.nr)),
       historico: leituras.todas(),
       curva: validos > 0 ? curvaRestante(estados, infos, config.anteriores, pctSecoes, projecao, candidatos) : [],
       ufs: linhasUf,
