@@ -9,6 +9,7 @@ const { carregarSecoes } = require('./lib/secoes');
 const { projetarPA, projetarMudanca, desfecho } = require('./lib/modelos');
 const { secoesRecebidas, estadoUfAoVivo, saldoUf, baseUf, curvaRestante } = require('./lib/ao-vivo');
 const { abrirLeituras } = require('./lib/leituras');
+const { indicePorMunicipio, infoPorMunicipio } = require('./lib/municipios');
 
 const UFS = ['ac', 'al', 'am', 'ap', 'ba', 'ce', 'df', 'es', 'go', 'ma', 'mg', 'ms', 'mt', 'pa',
   'pb', 'pe', 'pi', 'pr', 'rj', 'rn', 'ro', 'rr', 'rs', 'sc', 'se', 'sp', 'to', 'zz'];
@@ -34,10 +35,43 @@ function criarServidor(config, buscar = fetch) {
   const urlCs = (uf) => `${BASE}/arquivo-urna/${config.pleito}/config/${uf}/${uf}-p${padP}-cs.json`;
   const leituras = abrirLeituras(config.leituras);
 
+  const urlMunLista = `${BASE}/${config.eleicao}/config/mun-e${pad}-cm.json`;
+  const urlMun = (uf, mun) => `${BASE}/${config.eleicao}/dados/${uf}/${uf}${mun}-c0001-e${pad}-u.json`;
+  const forcarMunicipio = new Set(config.forcarMunicipio ?? []);
+
   const ultimoU = {}; // última leitura boa de cada abrangência
-  const recebidas = new Map(); // uf -> {total, recebidas, todas}
+  const recebidas = new Map(); // uf -> {total, recebidas, todas} vindo do -cs.json
+  const porMunicipio = new Map(); // uf -> mesmo formato, vindo dos arquivos por município (plano B)
+  let indiceMun = null;
+  let listaMun = null; // uf -> [códigos de município]
   let avisos = [];
   let ciclo = 0;
+
+  const precisaMunicipio = (uf) => {
+    if (forcarMunicipio.has(uf)) return true;
+    const u = ultimoU[uf] && lerArquivoTse(ultimoU[uf]);
+    return Boolean(u && u.validos > 0 && !(recebidas.get(uf)?.recebidas.size > 0));
+  };
+  const infoUf = (uf) => (precisaMunicipio(uf) && porMunicipio.has(uf) ? porMunicipio.get(uf) : recebidas.get(uf) ?? null);
+
+  async function atualizarMunicipios(falhas) {
+    const alvo = ufs.filter((uf) => uf !== 'zz' && precisaMunicipio(uf));
+    if (!alvo.length || !config.anteriores) return;
+    try {
+      if (!listaMun) {
+        const cm = await obter(urlMunLista);
+        listaMun = new Map(cm.abr.map((a) => [String(a.cd).toLowerCase(), a.mu.map((m) => m.cd)]));
+      }
+    } catch (e) { falhas.push(`lista de municípios: ${e.message}`); return; }
+    indiceMun ??= indicePorMunicipio(config.anteriores);
+    for (const uf of alvo) {
+      const arquivos = [];
+      await emParalelo(listaMun.get(uf) ?? [], 8, async (mun) => {
+        try { arquivos.push(lerArquivoTse(await obter(urlMun(uf, mun)))); } catch { /* município pulado nesta rodada */ }
+      });
+      if (arquivos.length) porMunicipio.set(uf, infoPorMunicipio(arquivos, indiceMun, uf));
+    }
+  }
   let estado = { erro: 'Primeira leitura em andamento', historico: leituras.todas() };
 
   async function obter(url) {
@@ -59,6 +93,7 @@ function criarServidor(config, buscar = fetch) {
         } catch (e) { falhas.push(`${uf} (seções): ${e.message}`); }
       });
     }
+    if (ciclo % 5 === 1) await atualizarMunicipios(falhas); // a cada ~5 min, só UFs que precisam
     avisos = falhas;
     calcular();
   }
@@ -70,7 +105,8 @@ function criarServidor(config, buscar = fetch) {
     const todosCandidatos = (br ?? ufsTse[0]).candidatos;
     const candidatos = config.candidatos === 'todos' ? todosCandidatos.map((c) => c.numero) : config.candidatos;
 
-    const estados = ufsTse.map((u) => estadoUfAoVivo(u, recebidas.get(u.uf) ?? null, config.anteriores, candidatos));
+    const infos = new Map(ufsTse.map((u) => [u.uf, infoUf(u.uf)]));
+    const estados = ufsTse.map((u) => estadoUfAoVivo(u, infos.get(u.uf), config.anteriores, candidatos));
     const validos = estados.reduce((a, e) => a + e.validos, 0);
     const temAnterior = estados.some((e) => e.anterior && e.anterior.restantes.validos + e.anterior.apuradas.validos > 0);
     const metodo = config.metodo === 'mudanca' && !temAnterior ? 'pa' : config.metodo;
@@ -91,7 +127,7 @@ function criarServidor(config, buscar = fetch) {
     const linhasUf = ufsTse.filter((u) => u.uf !== 'zz').map((u, i) => {
       const e = estados[ufsTse.indexOf(u)];
       const s = saldoUf(e);
-      const base = baseUf(u, recebidas.get(u.uf)?.recebidas ?? new Set());
+      const base = infos.get(u.uf)?.base === 'municipio' ? 'municipio' : baseUf(u, infos.get(u.uf)?.recebidas ?? new Set());
       const f = (x) => x.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       const detalhe = s.saldo === null
         ? `${u.uf.toUpperCase()}: aguardando seções apuradas`
@@ -115,7 +151,7 @@ function criarServidor(config, buscar = fetch) {
         votos: votosAtuais[c], pct: pctAtual[c], votosProjetados: projecao.votos[c], pctProjetado: projecao.pct[c],
       })).sort((a, b) => b.pctProjetado - a.pctProjetado),
       historico: leituras.todas(),
-      curva: validos > 0 ? curvaRestante(estados, recebidas, config.anteriores, pctSecoes, projecao, candidatos) : [],
+      curva: validos > 0 ? curvaRestante(estados, infos, config.anteriores, pctSecoes, projecao, candidatos) : [],
       ufs: linhasUf,
       avisos,
       backtest: config.resumoBacktest ?? null,
@@ -167,6 +203,7 @@ async function main() {
     candidatos: process.env.CANDIDATOS === 'todos' ? 'todos' : (process.env.CANDIDATOS || '13,22').split(','),
     metodo: process.env.METODO || escolha.metodo, resumoBacktest: escolha.resumo,
     leituras: process.env.LEITURAS || path.join(raiz, 'data', 'leituras', `${eleicao}.jsonl`),
+    forcarMunicipio: (process.env.FORCAR_MUNICIPIO || '').split(',').filter(Boolean),
     anteriores, raiz,
   };
   const s = criarServidor(config);
