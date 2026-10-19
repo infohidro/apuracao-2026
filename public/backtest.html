@@ -28,7 +28,7 @@
   <div class="sub">Apuração refeita seção por seção, na ordem real em que os boletins de urna chegaram ao TSE.
     "Acertou a partir de X%" = desde esse ponto o modelo apontou o desfecho certo e não mudou mais.</div>
   <div id="casos"></div>
-  <p class="nota">Linha cheia: projeção do método a cada 1% das seções. Linha fina: percentual apurado naquele momento.
+  <p class="nota">Cada linha é a projeção do método recalculada a cada 1% das seções.
     No 1º turno, "desfecho" é haver ou não 2º turno e entre quem.</p>
 </main>
 <script src="/lib/grafico.js"></script>
@@ -36,7 +36,11 @@
 const CORES = { 13: '#e07a1f', 22: '#3b6fd6' };
 const EXTRAS = ['#2a9d8f', '#9b5de5', '#8d6e63', '#c0392b'];
 const NOMES_METODO = { pa: 'Progressão aritmética', mudanca: 'Mudança sobre o 1º turno' };
-const NOMES = { 13: 'Lula', 22: 'Bolsonaro/Flávio' };
+const NOMES_POR_CASO = {
+  '2022-2t': { 13: 'Lula', 22: 'Bolsonaro' },
+  '2026-1t': { 13: 'Lula', 22: 'Flávio', 70: 'Cury', 14: 'Renan', 55: 'Caiado', 30: 'Zema' },
+};
+let NOMES = {};
 const fmt = Grafico.fmt;
 
 function bloco(tag, texto, classe) {
@@ -58,6 +62,7 @@ function candidatosDoCaso(res) {
 }
 
 function desenharCaso(res, alvo) {
+  NOMES = NOMES_POR_CASO[res.caso] ?? {};
   const sec = bloco('section');
   sec.append(bloco('h2', `${res.titulo} — final: ${Object.entries(res.final.pct).sort((a, b) => b[1] - a[1]).slice(0, 2)
     .map(([nr, p]) => `${NOMES[nr] ?? nr} ${fmt(p, 2)}%`).join(' × ')}`));
@@ -76,7 +81,6 @@ function desenharCaso(res, alvo) {
       pontos: serie.pontos.map((p) => ({ pctSecoes: p.pctSecoes, pct: p.pctProjetado })),
       candidatos: cand,
     });
-    // linha fina com o apurado no momento
     const fino = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     c.append(bloco('h3', 'Distância da projeção até o resultado final (p.p., candidato líder)'));
     c.append(fino);
