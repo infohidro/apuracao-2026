@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presidente 2026 · 2º turno</title>
+<style>
+  :root { --fundo: #f4f2ec; --cartao: #fffdf8; --texto: #1c1b18; --suave: #6b675d; --linha: #dedacf; --alerta: #9a5b00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fundo: #15171a; --cartao: #1d2024; --texto: #ecebe6; --suave: #9a9a92; --linha: #30343a; --alerta: #e0a94a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.15rem; margin: 0; letter-spacing: .02em; text-transform: uppercase; }
+  h2 { font-size: .9rem; text-transform: uppercase; letter-spacing: .04em; margin: 28px 0 8px; }
+  .sub, .nota { color: var(--suave); font-size: .85rem; }
+  #avisos { color: var(--alerta); font-size: .85rem; margin-top: 6px; }
+  .topo { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+  .num { flex: 1 1 200px; background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; padding: 12px 14px; }
+  .num b { display: block; font-size: 1.6rem; line-height: 1.2; }
+  .num span { color: var(--suave); font-size: .8rem; }
+  #desfecho { font-size: 1.3rem; font-weight: 600; }
+  .cartao { background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; padding: 12px 14px; }
+  svg { width: 100%; height: auto; display: block; }
+  .legenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: .85rem; color: var(--suave); margin-top: 6px; }
+  .saldo-linha { display: grid; grid-template-columns: 40px 1fr; align-items: center; height: 22px; cursor: default; }
+  .saldo-uf { font-size: .8rem; color: var(--suave); }
+  .saldo-trilho { position: relative; height: 100%; border-left: 0; background: linear-gradient(var(--linha), var(--linha)) 50% 0 / 1px 100% no-repeat; }
+  .saldo-vazio { color: var(--suave); font-size: .75rem; padding-left: calc(50% + 6px); line-height: 22px; }
+  .eixo-saldo { display: flex; justify-content: space-between; font-size: .75rem; margin: 6px 0 0 40px; }
+  .selo { font-size: .7rem; border: 1px solid var(--linha); border-radius: 4px; padding: 0 4px; margin-left: 4px; color: var(--suave); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Presidente 2026 · 2º turno</h1>
+  <div class="sub" id="status">Carregando…</div>
+  <div id="avisos"></div>
+
+  <div class="topo">
+    <div class="num"><b id="secoes">–</b><span>seções totalizadas (TSE)</span></div>
+    <div class="num" style="flex-basis: 360px"><b id="desfecho">–</b><span id="metodo"></span></div>
+  </div>
+  <div class="topo" id="candidatos"></div>
+
+  <h2>Evolução e projeção até o fim da apuração</h2>
+  <div class="cartao">
+    <svg id="evolucao"></svg>
+    <div class="legenda"><span>── apurado a cada leitura do TSE</span><span>- - - projeção até 100%</span></div>
+  </div>
+
+  <h2>Quem cresceu mais em cada estado, nas mesmas seções do 1º turno</h2>
+  <div class="cartao">
+    <div class="eixo-saldo"><span style="color:#3b6fd6">← Flávio cresceu mais</span><span style="color:#e07a1f">Lula cresceu mais →</span></div>
+    <div id="saldo"></div>
+    <div class="nota" id="notaSaldo"></div>
+  </div>
+
+  <p class="nota">Saldo = (variação de Lula − variação de Flávio) em pontos percentuais dos votos válidos, comparando o 2º turno
+    com o 1º turno nas mesmas seções já apuradas. Passe o mouse sobre um estado para ver os números.
+    A projeção é uma extrapolação, sem margem de erro. <span id="notaBacktest"></span></p>
+</main>
+<script src="/lib/grafico.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const fmt = Grafico.fmt;
+const NOMES_METODO = { pa: 'progressão aritmética', mudanca: 'mudança sobre o 1º turno' };
+
+function desenhar(p) {
+  if (p.erro) { $('status').textContent = p.erro; return; }
+  $('status').textContent = `Dados do TSE gerados em ${p.geradoTse} · lido às ${new Date(p.lidoEm).toLocaleTimeString('pt-BR')}`;
+  $('avisos').textContent = p.avisos.length ? `Atenção: ${p.avisos.length} arquivo(s) do TSE não atualizado(s) nesta leitura (${p.avisos.slice(0, 3).join('; ')}). Usando a última leitura boa.` : '';
+  $('secoes').textContent = fmt(p.pctSecoes, 2) + '%';
+  $('desfecho').textContent = p.desfecho;
+  $('metodo').textContent = `método: ${NOMES_METODO[p.metodo] ?? p.metodo}`;
+
+  $('candidatos').replaceChildren(...p.candidatos.slice(0, 4).map((c) => {
+    const d = document.createElement('div');
+    d.className = 'num';
+    const b = document.createElement('b');
+    b.style.color = c.cor;
+    b.textContent = `${fmt(c.pctProjetado, 2)}%`;
+    const s = document.createElement('span');
+    s.textContent = `${c.nome} · projeção (agora ${fmt(c.pct, 2)}%, ${Math.round(c.votos).toLocaleString('pt-BR')} votos)`;
+    d.append(b, s);
+    return d;
+  }));
+
+  const cand = p.candidatos.slice(0, 4).map((c) => ({ nr: c.nr, nome: c.nome.split(' ')[0], cor: c.cor }));
+  Grafico.desenharEvolucao($('evolucao'), {
+    pontos: p.historico.map((l) => ({ pctSecoes: l.pctSecoes, pct: l.pctAtual })),
+    projecao: p.curva,
+    candidatos: cand,
+  });
+
+  Grafico.desenharSaldo($('saldo'), p.ufs.map((u) => ({
+    uf: u.uf.toUpperCase() + (u.base === 'municipio' ? '*' : ''), saldo: u.saldo, detalhe: u.detalhe,
+  })));
+  const porMun = p.ufs.filter((u) => u.base === 'municipio').map((u) => u.uf.toUpperCase());
+  $('notaSaldo').textContent = porMun.length ? `* comparado por município (o TSE ainda não informou as seções): ${porMun.join(', ')}` : '';
+
+  const b = p.backtest;
+  $('notaBacktest').textContent = b
+    ? 'No teste com o 2º turno de 2022, ' + Object.entries(b).map(([m, v]) => `${NOMES_METODO[m]} acertou a partir de ${v === null ? '— (nunca estabilizou)' : v + '%'}`).join('; ') + '.'
+    : '';
+}
+
+async function atualizar() {
+  try { desenhar(await (await fetch('/api/panorama')).json()); }
+  catch { $('status').textContent = 'Servidor local fora do ar. Rode: node servidor-2t.js'; }
+}
+atualizar();
+setInterval(atualizar, 20000);
+</script>
+</body>
+</html>
