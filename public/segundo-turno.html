@@ -35,6 +35,8 @@
 <body>
 <main>
   <h1>Presidente 2026 · 2º turno</h1>
+  <div class="sub"><b>Projeção própria</b> calculada a partir dos resultados parciais publicados pelo TSE. Não é pesquisa eleitoral
+    e não tem vínculo com o TSE. O resultado oficial é o divulgado pelo TSE.</div>
   <div class="sub" id="status">Carregando…</div>
   <div id="avisos"></div>
 
@@ -108,7 +110,7 @@ function desenhar(p) {
 
 async function atualizar() {
   try { desenhar(await (await fetch('/api/panorama')).json()); }
-  catch { $('status').textContent = 'Servidor local fora do ar. Rode: node servidor-2t.js'; }
+  catch { $('status').textContent = 'Sem conexão com o servidor. Tentando de novo em 20 segundos…'; }
 }
 atualizar();
 setInterval(atualizar, 20000);
