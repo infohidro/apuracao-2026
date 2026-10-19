@@ -44,6 +44,12 @@ test('agrega só presidente, sem duplicar aptos', () => {
   assert.strictEqual(s.r, new Date('2022-10-02T21:45:30Z').getTime());
 });
 
+test('aceita o formato de data do bweb de 2026 (AAAA-MM-DD)', () => {
+  const c = linha('Presidente', 'Nominal', '13', '1');
+  c[idx.DT_BU_RECEBIDO] = '2026-10-04 18:25:49';
+  assert.strictEqual(lerLinhaBweb(c, idx).recebidoEm, new Date('2026-10-04T21:25:49Z').getTime());
+});
+
 test('horário vazio vira null', () => {
   const c = linha('Presidente', 'Nominal', '13', '1');
   c[idx.DT_BU_RECEBIDO] = '#NULO#';
