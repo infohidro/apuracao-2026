@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presidente 2026 · apuração e projeção</title>
+<style>
+  :root {
+    --fundo: #f4f2ec; --cartao: #fffdf8; --texto: #1c1b18; --suave: #6b675d; --linha: #dedacf;
+    --atual: #b9b3a3; --proj: #1f5f4a; --alerta: #9a5b00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #15171a; --cartao: #1d2024; --texto: #ecebe6; --suave: #9a9a92; --linha: #30343a;
+      --atual: #5a5f66; --proj: #5fc3a0; --alerta: #e0a94a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto);
+    font: 15px/1.45 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.15rem; margin: 0; letter-spacing: .02em; text-transform: uppercase; }
+  .sub { color: var(--suave); font-size: .85rem; }
+  .topo { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+  .num { flex: 1 1 150px; background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; padding: 12px 14px; }
+  .num b { display: block; font-size: 1.6rem; line-height: 1.2; }
+  .num span { color: var(--suave); font-size: .8rem; }
+  #desfecho { font-size: 1.25rem; font-weight: 600; margin: 4px 0 18px; }
+  .cand { background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; }
+  .cand .cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .cand .nome { font-weight: 600; }
+  .cand .partido { color: var(--suave); font-weight: 400; font-size: .85rem; }
+  .cand .pp { font-size: 1.5rem; font-weight: 700; color: var(--proj); white-space: nowrap; }
+  .trilho { position: relative; height: 16px; background: var(--fundo); border-radius: 4px; margin: 8px 0 6px; overflow: hidden; }
+  .trilho i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .trilho .p { background: var(--proj); opacity: .9; }
+  .trilho .a { background: var(--atual); height: 6px; top: auto; }
+  .trilho .meio { left: 50%; width: 1px; background: var(--texto); opacity: .45; border-radius: 0; }
+  .det { color: var(--suave); font-size: .82rem; }
+  h2 { font-size: .9rem; text-transform: uppercase; letter-spacing: .04em; margin: 28px 0 8px; }
+  .rolagem { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; }
+  th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--linha); white-space: nowrap; }
+  th { font-size: .75rem; color: var(--suave); text-transform: uppercase; font-weight: 600; }
+  th:first-child, td:first-child, th:nth-child(4), td:nth-child(4) { text-align: left; }
+  .aviso { color: var(--alerta); }
+  .nota { color: var(--suave); font-size: .8rem; margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Presidente 2026 · 1º turno</h1>
+  <div class="sub" id="status">Carregando…</div>
+
+  <div class="topo">
+    <div class="num"><b id="secoes">–</b><span>seções totalizadas (TSE)</span></div>
+    <div class="num"><b id="eleitorado">–</b><span>do eleitorado já apurado</span></div>
+    <div class="num"><b id="validos">–</b><span>votos válidos até agora</span></div>
+    <div class="num"><b id="validosProj">–</b><span>votos válidos previstos no final</span></div>
+  </div>
+
+  <div id="desfecho"></div>
+  <div id="candidatos"></div>
+
+  <h2>Por UF</h2>
+  <div class="rolagem">
+    <table>
+      <thead><tr><th>UF</th><th>Seções</th><th>Eleitorado apurado</th><th>Líder atual</th><th>Peso no total previsto</th></tr></thead>
+      <tbody id="ufs"></tbody>
+    </table>
+  </div>
+
+  <p class="nota">Barra grossa: percentual projetado dos votos válidos. Barra fina: percentual atual. Traço vertical: 50%.<br>
+  A projeção é uma extrapolação linear por UF (o que falta apurar em cada estado repete a proporção já apurada nele),
+  com o tamanho final de cada UF estimado pelo comparecimento de 2022. Não é um modelo estatístico nem tem margem de erro;
+  no início da apuração pode oscilar bastante. <span id="notaHist"></span></p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const pct = (x, casas = 2) => x.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) + '%';
+const inteiro = (x) => Math.round(x).toLocaleString('pt-BR');
+const el = (tag, classe, texto) => {
+  const e = document.createElement(tag);
+  if (classe) e.className = classe;
+  if (texto != null) e.textContent = texto;
+  return e;
+};
+
+function desenhar(p) {
+  if (p.erro) { $('status').textContent = p.erro; return; }
+  const lido = new Date(p.lidoEm).toLocaleTimeString('pt-BR');
+  $('status').textContent = `Dados do TSE gerados em ${p.geradoTse ?? '?'} · lido às ${lido}` +
+    (p.totalizacaoFinal ? ' · totalização encerrada' : '') +
+    (p.falhas.length ? ` · ${p.falhas.length} arquivo(s) não atualizado(s)` : '');
+  $('secoes').textContent = p.secoesPct == null ? '–' : pct(p.secoesPct);
+  $('eleitorado').textContent = pct(p.eleitoradoPct);
+  $('validos').textContent = inteiro(p.validosAtual);
+  $('validosProj').textContent = p.validosProjetados ? inteiro(p.validosProjetados) : '–';
+  $('desfecho').textContent = p.desfecho;
+
+  const escala = Math.max(55, ...p.candidatos.map((c) => Math.max(c.pct, c.pctProjetado)));
+  const lista = $('candidatos');
+  lista.replaceChildren(...p.candidatos.map((c) => {
+    const cartao = el('div', 'cand');
+    const cab = el('div', 'cab');
+    const nome = el('div', 'nome', c.nome + ' ');
+    nome.append(el('span', 'partido', `${c.partido} · ${c.numero}`));
+    cab.append(nome, el('div', 'pp', p.validosAtual ? pct(c.pctProjetado) : '–'));
+    const trilho = el('div', 'trilho');
+    const proj = el('i', 'p'); proj.style.width = (c.pctProjetado / escala) * 100 + '%';
+    const atual = el('i', 'a'); atual.style.width = (c.pct / escala) * 100 + '%';
+    const meio = el('i', 'meio'); meio.style.left = (50 / escala) * 100 + '%';
+    trilho.append(proj, atual, meio);
+    const det = el('div', 'det',
+      `Agora: ${pct(c.pct)} (${inteiro(c.votos)} votos) · Projeção: ${inteiro(c.votosProjetados)} votos`);
+    cartao.append(cab, trilho, det);
+    return cartao;
+  }));
+
+  $('ufs').replaceChildren(...[...p.ufs].sort((a, b) => b.pesoPct - a.pesoPct).map((u) => {
+    const tr = el('tr');
+    const lider = u.lider ? `${u.lider.nome} (${pct(u.lider.pct, 1)})` : 'sem votos — usa a média nacional';
+    const tdLider = el('td', u.lider ? '' : 'aviso', lider);
+    tr.append(
+      el('td', '', (u.uf === 'zz' ? 'Exterior' : u.uf.toUpperCase()) + (u.temHistorico ? '' : ' *')),
+      el('td', '', pct(u.secoesPct)), el('td', '', pct(u.eleitoradoPct)), tdLider, el('td', '', pct(u.pesoPct, 1)),
+    );
+    return tr;
+  }));
+  $('notaHist').textContent = p.ufsComHistorico < p.ufs.length
+    ? `* UF sem histórico próprio de 2022 disponível: usa a taxa nacional de 2022 (${p.ufsComHistorico} de ${p.ufs.length} UFs têm histórico próprio).`
+    : '';
+}
+
+async function atualizar() {
+  try {
+    desenhar(await (await fetch('/api/panorama')).json());
+  } catch {
+    $('status').textContent = 'Servidor local fora do ar. Rode: node server.js';
+  }
+}
+atualizar();
+setInterval(atualizar, 20000);
+</script>
+</body>
+</html>

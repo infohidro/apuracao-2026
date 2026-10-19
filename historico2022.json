@@ -1,0 +1,114 @@
+{
+ "ac": {
+  "eleitorado": 587738,
+  "eleitoradoApurado": 587738,
+  "comparecimento": 455903,
+  "validos": 440917,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7501931132579482
+ },
+ "al": null,
+ "am": null,
+ "ap": {
+  "eleitorado": 550165,
+  "eleitoradoApurado": 550165,
+  "comparecimento": 442842,
+  "validos": 432161,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7855116192415003
+ },
+ "ba": {
+  "eleitorado": 11283405,
+  "eleitoradoApurado": 10601622,
+  "comparecimento": 8347790,
+  "validos": 7921504,
+  "secoesPct": "94,00",
+  "taxaValidos": 0.7471973628186328
+ },
+ "ce": {
+  "eleitorado": 6818732,
+  "eleitoradoApurado": 6564876,
+  "comparecimento": 5420619,
+  "validos": 5228702,
+  "secoesPct": "96,14",
+  "taxaValidos": 0.7964662241906778
+ },
+ "df": {
+  "eleitorado": 2206996,
+  "eleitoradoApurado": 2206996,
+  "comparecimento": 1819900,
+  "validos": 1762575,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7986308085741887
+ },
+ "es": null,
+ "go": null,
+ "ma": null,
+ "mg": {
+  "eleitorado": 16283828,
+  "eleitoradoApurado": 16283828,
+  "comparecimento": 12655228,
+  "validos": 12016633,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7379489024325239
+ },
+ "ms": null,
+ "mt": null,
+ "pa": null,
+ "pb": null,
+ "pe": {
+  "eleitorado": 7015421,
+  "eleitoradoApurado": 7015421,
+  "comparecimento": 5738371,
+  "validos": 5452009,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7771463751070677
+ },
+ "pi": null,
+ "pr": null,
+ "rj": null,
+ "rn": null,
+ "ro": null,
+ "rr": null,
+ "rs": {
+  "eleitorado": 8589432,
+  "eleitoradoApurado": 508338,
+  "comparecimento": 412918,
+  "validos": 398498,
+  "secoesPct": "6,03",
+  "taxaValidos": 0.7839232951304054
+ },
+ "sc": {
+  "eleitorado": 5501478,
+  "eleitoradoApurado": 5501478,
+  "comparecimento": 4487474,
+  "validos": 4330984,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7872400834830204
+ },
+ "se": null,
+ "sp": {
+  "eleitorado": 34684927,
+  "eleitoradoApurado": 34654453,
+  "comparecimento": 27166550,
+  "validos": 25634270,
+  "secoesPct": "99,90",
+  "taxaValidos": 0.739710709039326
+ },
+ "to": {
+  "eleitorado": 1094346,
+  "eleitoradoApurado": 1094346,
+  "comparecimento": 891449,
+  "validos": 861792,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.7874949970119139
+ },
+ "zz": {
+  "eleitorado": 695355,
+  "eleitoradoApurado": 694782,
+  "comparecimento": 304032,
+  "validos": 294525,
+  "secoesPct": "100,00",
+  "taxaValidos": 0.42390994585351954
+ }
+}
