@@ -158,3 +158,7 @@ Distância até o resultado final no 2º turno de 2022 (Lula):
 | `test/` | Testes (`node --test`) |
 | `server.js`, `index.html`, `projecao.js` | Versão usada no 1º turno de 2026 (projeção por UF com progressão aritmética) |
 | `docs/superpowers/` | Documento de desenho e plano de implementação |
+
+## Licença
+
+Código sob a licença [MIT](LICENSE). Os dados em `dados/secoes/` são derivados dos dados abertos do TSE.
