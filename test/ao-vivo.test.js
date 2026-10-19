@@ -34,7 +34,8 @@ test('saldo em p.p. nas mesmas seções', () => {
   const r = secoesRecebidas(CS).get('ac');
   const e = estadoUfAoVivo(ufTse(48, 52), r, ANTERIORES, ['13', '22']);
   assert.strictEqual(e.anterior.apuradas.validos, 100);
-  assert.strictEqual(e.anterior.restantes.validos, 100);
+  // TSE: 2/3 do eleitorado apurado -> restante = 1/3 dos 200 válidos do 1º turno na UF
+  assert.ok(Math.abs(e.anterior.restantes.validos - 200 / 3) < 1e-9);
   const s = saldoUf(e);
   assert.ok(Math.abs(s.saldo - 6) < 1e-9, String(s.saldo)); // (48-40) - (52-50)
   assert.ok(Math.abs(s.lula1 - 40) < 1e-9);
@@ -44,6 +45,18 @@ test('saldo em p.p. nas mesmas seções', () => {
 test('saldo nulo sem seções recebidas', () => {
   const r = { total: 3, recebidas: new Set(), todas: secoesRecebidas(CS).get('ac').todas };
   assert.strictEqual(saldoUf(estadoUfAoVivo(ufTse(0, 0, 300, 0), r, ANTERIORES, ['13', '22'])).saldo, null);
+});
+
+test('tamanho do restante segue a fração apurada do TSE, mesmo sem seções marcadas', () => {
+  const todas = secoesRecebidas(CS).get('ac').todas;
+  // TSE diz 1/3 do eleitorado apurado, mas o -cs.json ainda não marcou nenhuma seção
+  const e = estadoUfAoVivo(ufTse(30, 20, 300, 100), { total: 3, recebidas: new Set(), todas }, ANTERIORES, ['13', '22']);
+  assert.ok(Math.abs(e.anterior.restantes.validos - 200 * (2 / 3)) < 1e-9, String(e.anterior.restantes.validos));
+  assert.ok(Math.abs(e.anterior.apuradas.validos - 200 * (1 / 3)) < 1e-9);
+  // -cs.json atrasado: marcou 2 de 3 seções, TSE diz metade apurada -> restante = metade do 1º turno
+  const r = secoesRecebidas(CS).get('ac');
+  const e2 = estadoUfAoVivo(ufTse(48, 52, 300, 150), r, ANTERIORES, ['13', '22']);
+  assert.ok(Math.abs(e2.anterior.restantes.validos - 100) < 1e-9, String(e2.anterior.restantes.validos));
 });
 
 test('base da UF', () => {

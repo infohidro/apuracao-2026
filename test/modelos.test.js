@@ -55,6 +55,13 @@ test('mudança: UF sem apuração usa variação e comparecimento nacionais', ()
   perto(p.votos['22'], 52 + 200 * 0.32 + 400 * 0.52);
 });
 
+test('mudança: UF sem dados do turno anterior ainda projeta o restante (como PA)', () => {
+  const semAnterior = { uf: 'sp', aptosTotal: 1000, aptosApurados: 500, validos: 400, votos: { 13: 300, 22: 100 }, anterior: null };
+  const p = projetarMudanca([ufMudanca(), semAnterior], C);
+  perto(p.votos['13'], 48 + 200 * 0.68 + 300 + 500 * 0.8 * 0.75);
+  perto(p.votos['22'], 52 + 200 * 0.32 + 100 + 500 * 0.8 * 0.25);
+});
+
 test('mudança sem turno anterior lança erro', () => {
   assert.throws(() => projetarMudanca([{ uf: 'sp', aptosTotal: 1, aptosApurados: 0, validos: 0, votos: {}, anterior: null }], C),
     /mudança exige turno anterior/);
