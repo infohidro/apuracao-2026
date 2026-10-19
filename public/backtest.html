@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teste histórico da projeção</title>
+<style>
+  :root { --fundo: #f4f2ec; --cartao: #fffdf8; --texto: #1c1b18; --suave: #6b675d; --linha: #dedacf; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fundo: #15171a; --cartao: #1d2024; --texto: #ecebe6; --suave: #9a9a92; --linha: #30343a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fundo); color: var(--texto); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.15rem; margin: 0 0 4px; text-transform: uppercase; letter-spacing: .02em; }
+  h2 { font-size: 1rem; margin: 28px 0 6px; }
+  h3 { font-size: .85rem; margin: 14px 0 4px; color: var(--suave); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+  .sub, .nota { color: var(--suave); font-size: .85rem; }
+  .cartao { background: var(--cartao); border: 1px solid var(--linha); border-radius: 8px; padding: 14px; margin-top: 10px; }
+  .frase { font-size: 1.05rem; margin: 4px 0; }
+  .frase b { font-size: 1.2rem; }
+  svg { width: 100%; height: auto; display: block; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Teste histórico da projeção</h1>
+  <div class="sub">Apuração refeita seção por seção, na ordem real em que os boletins de urna chegaram ao TSE.
+    "Acertou a partir de X%" = desde esse ponto o modelo apontou o desfecho certo e não mudou mais.</div>
+  <div id="casos"></div>
+  <p class="nota">Linha cheia: projeção do método a cada 1% das seções. Linha fina: percentual apurado naquele momento.
+    No 1º turno, "desfecho" é haver ou não 2º turno e entre quem.</p>
+</main>
+<script src="/lib/grafico.js"></script>
+<script>
+const CORES = { 13: '#e07a1f', 22: '#3b6fd6' };
+const EXTRAS = ['#2a9d8f', '#9b5de5', '#8d6e63', '#c0392b'];
+const NOMES_METODO = { pa: 'Progressão aritmética', mudanca: 'Mudança sobre o 1º turno' };
+const NOMES = { 13: 'Lula', 22: 'Bolsonaro/Flávio' };
+const fmt = Grafico.fmt;
+
+function bloco(tag, texto, classe) {
+  const e = document.createElement(tag);
+  if (texto != null) e.textContent = texto;
+  if (classe) e.className = classe;
+  return e;
+}
+
+async function carregar(caso) {
+  const r = await fetch('/api/backtest/' + caso);
+  if (!r.ok) return null;
+  return r.json();
+}
+
+function candidatosDoCaso(res) {
+  const top = Object.entries(res.final.pct).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([nr]) => nr);
+  return top.map((nr, i) => ({ nr, nome: NOMES[nr] ?? nr, cor: CORES[nr] ?? EXTRAS[i] }));
+}
+
+function desenharCaso(res, alvo) {
+  const sec = bloco('section');
+  sec.append(bloco('h2', `${res.titulo} — final: ${Object.entries(res.final.pct).sort((a, b) => b[1] - a[1]).slice(0, 2)
+    .map(([nr, p]) => `${NOMES[nr] ?? nr} ${fmt(p, 2)}%`).join(' × ')}`));
+  if (res.semPar) sec.append(bloco('div', `${res.semPar.toLocaleString('pt-BR')} de ${res.totalSecoes.toLocaleString('pt-BR')} seções sem par no turno anterior (estimadas pelos aptos da UF).`, 'sub'));
+  const cand = candidatosDoCaso(res);
+  for (const [m, serie] of Object.entries(res.metodos)) {
+    const c = bloco('div', null, 'cartao');
+    c.append(bloco('h3', NOMES_METODO[m]));
+    const frase = bloco('p', null, 'frase');
+    frase.append(serie.acertoEm === null ? 'Nunca estabilizou no desfecho certo.' : 'Acertou a partir de ');
+    if (serie.acertoEm !== null) { frase.append(bloco('b', `${serie.acertoEm}%`)); frase.append(' das seções e não mudou mais.'); }
+    c.append(frase);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    c.append(svg);
+    Grafico.desenharEvolucao(svg, {
+      pontos: serie.pontos.map((p) => ({ pctSecoes: p.pctSecoes, pct: p.pctProjetado })),
+      candidatos: cand,
+    });
+    // linha fina com o apurado no momento
+    const fino = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    c.append(bloco('h3', 'Distância da projeção até o resultado final (p.p., candidato líder)'));
+    c.append(fino);
+    const lider = cand[0].nr;
+    Grafico.desenharEvolucao(fino, {
+      pontos: serie.pontos.map((p) => ({ pctSecoes: p.pctSecoes, pct: { d: Math.abs(p.pctProjetado[lider] - res.final.pct[lider]) } })),
+      candidatos: [{ nr: 'd', nome: 'erro', cor: 'var(--suave)' }],
+      rotuloFinal: false,
+    });
+    sec.append(c);
+  }
+  alvo.append(sec);
+}
+
+(async () => {
+  const alvo = document.getElementById('casos');
+  for (const caso of ['2022-2t', '2026-1t']) {
+    const res = await carregar(caso);
+    if (res) desenharCaso(res, alvo);
+    else alvo.append(bloco('p', `Caso ${caso} ainda não rodado (node scripts/backtest.js ${caso}).`, 'sub'));
+  }
+})();
+</script>
+</body>
+</html>
