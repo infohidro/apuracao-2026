@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { ladoMunicipios, resumoAbstencao, origemVotos } = require('../lib/abstencao');
+const { ladoMunicipios, resumoAbstencao, origemVotos, abstencaoUf } = require('../lib/abstencao');
 const { indicePorMunicipio } = require('../lib/municipios');
 
 const perto = (a, b, tol = 1e-9) => assert.ok(Math.abs(a - b) < tol, `${a} != ${b}`);
@@ -61,6 +61,15 @@ test('município sem seção apurada não entra', () => {
   });
   assert.strictEqual(r.nacional.lula, null);
   assert.strictEqual(r.barra, null);
+});
+
+test('abstenção da UF nas mesmas seções', () => {
+  const ufTse = { uf: 'ba', eleitorado: 300, eleitoradoApurado: 100, comparecimento: 70 };
+  const info = { recebidas: new Set(['ba-00002-0001-0001']), todas: new Set(ANTERIORES.keys()) };
+  const a = abstencaoUf(ufTse, info, ANTERIORES);
+  perto(a.abst1, 20);
+  perto(a.abst2, 30);
+  assert.strictEqual(abstencaoUf({ ...ufTse, eleitoradoApurado: 0 }, info, ANTERIORES), null);
 });
 
 test('origem dos votos apurados por lado, pesada pelos válidos do 1º turno', () => {

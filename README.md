@@ -90,7 +90,7 @@ TSE (resultados.tse.jus.br)                     dados/secoes/2026-1t.jsonl.gz
 
 ## Como projetamos o resultado
 
-Dois métodos estão implementados em `lib/modelos.js`. A tela usa o que se saiu melhor no teste histórico, hoje o de mudança.
+Os métodos estão implementados em `lib/modelos.js`. A tela usa o que se saiu melhor no teste histórico: primeiro o que acertou mais cedo e, no empate, o de menor erro médio até 50% apurado. Hoje é o de mudança com ajuste de abstenção por município.
 
 ### 1. Mudança sobre o 1º turno (método principal)
 
@@ -102,6 +102,19 @@ Para cada estado:
 4. Estado ainda sem nenhuma seção apurada usa a variação nacional.
 
 Somando os estados, sai o resultado final projetado. Comparar as mesmas seções elimina o principal viés da apuração: a ordem em que as urnas chegam. Capitais costumam entrar antes do interior, e isso mexe muito no placar parcial, mas não na variação de cada seção.
+
+### 1b. Ajuste de abstenção por município (usado na tela)
+
+O comparecimento muda de forma diferente conforme a região. Por isso, cada município é classificado como pró-Lula ou pró-Flávio, conforme quem teve mais votos ali no 1º turno.
+
+1. A cada 5 minutos o sistema lê os arquivos de todos os municípios do TSE (cerca de 5.570) e compara a abstenção do 2º turno com a do 1º turno **nas mesmas seções**.
+2. O restante de cada estado é dividido entre municípios pró-Lula e pró-Flávio. Cada parte usa a sua própria variação de votos válidos por eleitor, que capta abstenção, brancos e nulos.
+3. Se a abstenção sobe mais nos redutos de um candidato, as seções desses redutos que ainda faltam pesam menos na projeção.
+
+A tela mostra:
+
+- **Barra de abstenção:** pende para o candidato favorecido. Se a abstenção subiu mais onde o Lula venceu no 1º turno, ela é favorável ao Flávio, e vice-versa. Vem acompanhada de uma frase com os números e do efeito na projeção.
+- **De onde vieram os votos já apurados:** quanto das seções que já entraram vem de municípios pró-Lula e pró-Flávio, comparado com o total.
 
 ### 2. Progressão aritmética (referência)
 
@@ -119,10 +132,12 @@ O tracejado do gráfico reparte o que falta em cada estado pelas seções restan
 
 A apuração é refeita seção por seção, na ordem real de recebimento dos boletins, recalculando a projeção a cada 1% das seções. "Acertou a partir de X%" é o primeiro ponto a partir do qual o método apontou o desfecho certo e não mudou mais.
 
-| Caso | Mudança sobre o 1º turno | Progressão aritmética |
-|---|---|---|
-| 2º turno 2022 (Lula 50,90% × Bolsonaro 49,10%) | **acertou a partir de 1%** | acertou a partir de 45% |
-| 1º turno 2026 (haveria 2º turno entre Lula e Flávio) | não se aplica (não há turno anterior) | acertou a partir de 1% |
+| Caso | Mudança + abstenção por município | Mudança sobre o 1º turno | Progressão aritmética |
+|---|---|---|---|
+| 2º turno 2022 (Lula 50,90% × Bolsonaro 49,10%) | **acertou a partir de 1%** (erro médio até 50%: 0,029 p.p.) | acertou a partir de 1% (0,032 p.p.) | acertou a partir de 45% (0,87 p.p.) |
+| 1º turno 2026 (haveria 2º turno entre Lula e Flávio) | não se aplica | não se aplica (não há turno anterior) | acertou a partir de 1% |
+
+Em 2022 a abstenção mudou pouco e de forma parecida dos dois lados: −0,1 p.p. nos municípios pró-Lula e −0,6 p.p. nos pró-Bolsonaro. Por isso o ajuste de abstenção melhorou pouco a projeção. Ele faz diferença quando a abstenção se move de forma desigual.
 
 Distância até o resultado final no 2º turno de 2022 (Lula):
 
@@ -149,6 +164,7 @@ Distância até o resultado final no 2º turno de 2022 (Lula):
 | `lib/modelos.js` | Os dois métodos de projeção |
 | `lib/ao-vivo.js` | Comparação com o 1º turno por seção, saldo por estado e curva |
 | `lib/municipios.js` | Plano B por município |
+| `lib/abstencao.js` | Abstenção por lado (municípios pró-Lula e pró-Flávio) e origem dos votos apurados |
 | `lib/reprise.js` | Reprise histórica da apuração |
 | `lib/bweb.js`, `lib/secoes.js` | Leitura dos boletins de urna e dos arquivos de seções |
 | `lib/leituras.js` | Gravação das leituras ao vivo |

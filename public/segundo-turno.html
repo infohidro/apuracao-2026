@@ -29,6 +29,9 @@
   .saldo-trilho { position: relative; height: 100%; border-left: 0; background: linear-gradient(var(--linha), var(--linha)) 50% 0 / 1px 100% no-repeat; }
   .saldo-vazio { color: var(--suave); font-size: .75rem; padding-left: calc(50% + 6px); line-height: 22px; }
   .eixo-saldo { display: flex; justify-content: space-between; font-size: .75rem; margin: 6px 0 0 40px; }
+  .origem { display: grid; grid-template-columns: 130px 1fr; gap: 6px; align-items: center; font-size: .8rem; margin-top: 8px; }
+  .origem .pilha { display: flex; height: 16px; border-radius: 3px; overflow: hidden; font-size: .7rem; color: #fff; line-height: 16px; }
+  .origem .pilha i { font-style: normal; padding-left: 4px; white-space: nowrap; overflow: hidden; }
   .selo { font-size: .7rem; border: 1px solid var(--linha); border-radius: 4px; padding: 0 4px; margin-left: 4px; color: var(--suave); }
 </style>
 </head>
@@ -45,6 +48,17 @@
     <div class="num" style="flex-basis: 360px"><b id="desfecho">–</b><span id="metodo"></span></div>
   </div>
   <div class="topo" id="candidatos"></div>
+
+  <h2>Abstenção e origem dos votos</h2>
+  <div class="cartao" id="blocoAbstencao">
+    <b id="abstTitulo">Abstenção: aguardando os municípios</b>
+    <div class="saldo-trilho" id="abstBarra" style="height:22px;margin:8px 0 2px"></div>
+    <div class="eixo-saldo" style="margin-left:0"><span style="color:#3b6fd6">← favorável ao Flávio</span><span style="color:#e07a1f">favorável ao Lula →</span></div>
+    <p class="nota" id="abstTexto" style="margin:6px 0 12px"></p>
+    <b>De onde vieram os votos já apurados</b>
+    <div class="origem" id="origem"></div>
+    <p class="nota" id="origemTexto" style="margin:6px 0 0"></p>
+  </div>
 
   <h2>Evolução e projeção até o fim da apuração</h2>
   <div class="cartao">
@@ -67,7 +81,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const fmt = Grafico.fmt;
-const NOMES_METODO = { pa: 'progressão aritmética', mudanca: 'mudança sobre o 1º turno' };
+const NOMES_METODO = { pa: 'progressão aritmética', mudanca: 'mudança sobre o 1º turno', mudancaAbstencao: 'mudança sobre o 1º turno + abstenção por município' };
 
 function desenhar(p) {
   if (p.erro) { $('status').textContent = p.erro; return; }
@@ -102,10 +116,70 @@ function desenhar(p) {
   const porMun = p.ufs.filter((u) => u.base === 'municipio').map((u) => u.uf.toUpperCase());
   $('notaSaldo').textContent = porMun.length ? `* comparado por município (o TSE ainda não informou as seções): ${porMun.join(', ')}` : '';
 
+  desenharAbstencao(p.abstencao);
+
   const b = p.backtest;
   $('notaBacktest').textContent = b
     ? 'No teste com o 2º turno de 2022, ' + Object.entries(b).map(([m, v]) => `${NOMES_METODO[m]} acertou a partir de ${v === null ? '— (nunca estabilizou)' : v + '%'}`).join('; ') + '.'
     : '';
+}
+
+// Barra: variação da abstenção nos municípios pró-Lula − nos pró-Flávio. Positivo = abstenção
+// subiu mais onde o Lula foi melhor no 1º turno = favorável ao Flávio (barra para a esquerda).
+function desenharAbstencao(a) {
+  const barra = $('abstBarra');
+  barra.replaceChildren();
+  if (!a || a.barra === null) {
+    $('abstTitulo').textContent = 'Abstenção: aguardando municípios dos dois lados';
+    $('abstTexto').textContent = a ? `${a.municipiosLidos.toLocaleString('pt-BR')} municípios lidos até agora.` : '';
+  } else {
+    const favoreceFlavio = a.barra > 0;
+    const quanto = Math.abs(a.barra);
+    $('abstTitulo').textContent = quanto < 0.05 ? 'Abstenção: equilibrada entre os dois lados'
+      : `Abstenção favorável ao ${favoreceFlavio ? 'Flávio' : 'Lula'}`;
+    const w = Math.min(50, (quanto / 5) * 50); // escala: 5 p.p. de diferença enche meia barra
+    const i = document.createElement('i');
+    i.style.cssText = `position:absolute;top:3px;bottom:3px;width:${w}%;background:${favoreceFlavio ? '#3b6fd6' : '#e07a1f'};` +
+      (favoreceFlavio ? `left:${50 - w}%` : 'left:50%');
+    barra.append(i);
+    const s = (x) => (x >= 0 ? '+' : '') + fmt(x, 1);
+    $('abstTexto').textContent =
+      `Nos municípios onde o Lula venceu no 1º turno, a abstenção foi de ${fmt(a.lula.abst1, 1)}% para ${fmt(a.lula.abst2, 1)}% (${s(a.lula.delta)} p.p.); ` +
+      `onde o Flávio venceu, de ${fmt(a.flavio.abst1, 1)}% para ${fmt(a.flavio.abst2, 1)}% (${s(a.flavio.delta)} p.p.). ` +
+      (a.efeitoLula === null ? ''
+        : Math.abs(a.efeitoLula) < 0.005 ? 'Na projeção, o efeito disso é desprezível.'
+        : `Na projeção, isso ${a.efeitoLula >= 0 ? 'soma' : 'tira'} ${fmt(Math.abs(a.efeitoLula), 2)} p.p. ${a.efeitoLula >= 0 ? 'ao' : 'do'} Lula (já incluído no número da projeção).`);
+  }
+
+  const o = a?.origem;
+  const linha = (rotulo, pct) => {
+    const nome = document.createElement('span');
+    nome.textContent = rotulo;
+    const pilha = document.createElement('div');
+    pilha.className = 'pilha';
+    if (pct) {
+      for (const [lado, cor, txt] of [['lula', '#e07a1f', 'pró-Lula'], ['flavio', '#3b6fd6', 'pró-Flávio']]) {
+        const i = document.createElement('i');
+        i.style.cssText = `width:${pct[lado]}%;background:${cor}`;
+        i.textContent = `${txt} ${fmt(pct[lado], 0)}%`;
+        pilha.append(i);
+      }
+    } else {
+      pilha.textContent = '—';
+      pilha.style.color = 'var(--suave)';
+    }
+    return [nome, pilha];
+  };
+  $('origem').replaceChildren(...linha('Seções apuradas', o?.apuradas), ...linha('Todas as seções', o?.todas));
+  if (o?.apuradas && o?.todas) {
+    const d = o.apuradas.flavio - o.todas.flavio;
+    $('origemTexto').textContent = Math.abs(d) < 1
+      ? 'As seções que já entraram têm o mesmo perfil do total: o placar parcial não está puxado para nenhum lado.'
+      : `Até agora entraram mais seções de municípios pró-${d > 0 ? 'Flávio' : 'Lula'} do que no total (${fmt(d > 0 ? o.apuradas.flavio : o.apuradas.lula, 0)}% contra ${fmt(d > 0 ? o.todas.flavio : o.todas.lula, 0)}%): ` +
+        `o placar parcial está puxado para o ${d > 0 ? 'Flávio' : 'Lula'}, e a projeção corrige isso.`;
+  } else {
+    $('origemTexto').textContent = '';
+  }
 }
 
 async function atualizar() {

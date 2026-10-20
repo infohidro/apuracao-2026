@@ -62,6 +62,34 @@ test('sem votos não mostra projeção', async () => {
   }
 });
 
+test('abstenção por lado a partir dos arquivos de município', async () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'srv-')), 'l.jsonl');
+  // 1º turno: AC pró-Flávio (40x50), PR pró-Lula (60x30); 100 aptos e 100 comparecimentos por seção
+  const ant = new Map([...anteriores].map(([k, s]) => [k, s.uf === 'pr' ? { ...s, v: { 13: 60, 22: 30, 30: 10 } } : s]));
+  const buscar = tseFalso((url) => {
+    if (url.includes('-cs.json')) return cs(url.match(/config\/(\w\w)\//)[1]);
+    if (url.includes('-cm.json')) return { abr: [{ cd: 'ac', mu: [{ cd: '00001' }] }, { cd: 'pr', mu: [{ cd: '00001' }] }] };
+    const m = url.match(/dados\/(\w\w)\/\w\w(\d{5})-/);
+    if (m) { // município: PR (pró-Lula) com 70% de comparecimento, AC com 90%
+      const t = tse(m[2], 30, 30);
+      t.e = { te: '200', est: '100', c: m[1] === 'pr' ? '70' : '90' };
+      return t;
+    }
+    return tse(url.match(/dados\/(\w\w)\//)[1], 40, 60);
+  });
+  const s = criarServidor({ ...config(f), anteriores: ant, metodo: 'mudancaAbstencao' }, buscar);
+  await s.atualizar();
+  await s.atualizarMunicipios();
+  const a = s.panorama().abstencao;
+  // abstenção nas seções recebidas: 1º turno 0% nos dois lados; 2º turno 30% (Lula) e 10% (Flávio)
+  assert.ok(Math.abs(a.lula.delta - 30) < 1e-9, JSON.stringify(a));
+  assert.ok(Math.abs(a.flavio.delta - 10) < 1e-9);
+  assert.ok(Math.abs(a.barra - 20) < 1e-9);
+  assert.ok(Number.isFinite(a.efeitoLula));
+  assert.ok(a.origem.todas.lula > 0);
+  assert.strictEqual(s.panorama().metodo, 'mudancaAbstencao');
+});
+
 test('escolhe o método que acerta antes e desempata pelo erro médio até 50%', () => {
   const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'raiz-'));
   fs.mkdirSync(path.join(raiz, 'data', 'backtest'), { recursive: true });

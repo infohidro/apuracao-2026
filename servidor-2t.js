@@ -6,16 +6,17 @@ const fs = require('fs');
 const path = require('path');
 const { lerArquivoTse, num } = require('./projecao');
 const { carregarSecoes, arquivoSecoes } = require('./lib/secoes');
-const { projetarPA, projetarMudanca, desfecho } = require('./lib/modelos');
+const { projetarPA, projetarMudanca, projetarMudancaAbstencao, desfecho } = require('./lib/modelos');
 const { secoesRecebidas, estadoUfAoVivo, saldoUf, baseUf, curvaRestante } = require('./lib/ao-vivo');
 const { abrirLeituras } = require('./lib/leituras');
 const { indicePorMunicipio, infoPorMunicipio } = require('./lib/municipios');
+const { ladoMunicipios, resumoAbstencao, origemVotos, abstencaoUf } = require('./lib/abstencao');
 
 const UFS = ['ac', 'al', 'am', 'ap', 'ba', 'ce', 'df', 'es', 'go', 'ma', 'mg', 'ms', 'mt', 'pa',
   'pb', 'pe', 'pi', 'pr', 'rj', 'rn', 'ro', 'rr', 'rs', 'sc', 'se', 'sp', 'to', 'zz'];
 const CORES = { 13: '#e07a1f', 22: '#3b6fd6' };
 const EXTRAS = ['#2a9d8f', '#9b5de5', '#8d6e63', '#c0392b', '#607d8b', '#6d4c41'];
-const METODOS = { pa: projetarPA, mudanca: projetarMudanca };
+const METODOS = { pa: projetarPA, mudanca: projetarMudanca, mudancaAbstencao: projetarMudancaAbstencao };
 const BASE = 'https://resultados.tse.jus.br/oficial/ele2026';
 const H = { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: undefined };
 
@@ -42,9 +43,12 @@ function criarServidor(config, buscar = fetch) {
   const ultimoU = {}; // última leitura boa de cada abrangência
   const recebidas = new Map(); // uf -> {total, recebidas, todas} vindo do -cs.json
   const porMunicipio = new Map(); // uf -> mesmo formato, vindo dos arquivos por município (plano B)
-  let indiceMun = null;
+  const munsPorUf = new Map(); // uf -> arquivos de município (lerArquivoTse), para a abstenção por lado
+  const indiceMun = config.anteriores ? indicePorMunicipio(config.anteriores) : null;
+  const lados = config.anteriores ? ladoMunicipios(config.anteriores) : null;
   let listaMun = null; // uf -> [códigos de município]
   let avisos = [];
+  let avisosMun = [];
   let ciclo = 0;
 
   const precisaMunicipio = (uf) => {
@@ -54,23 +58,40 @@ function criarServidor(config, buscar = fetch) {
   };
   const infoUf = (uf) => (precisaMunicipio(uf) && porMunicipio.has(uf) ? porMunicipio.get(uf) : recebidas.get(uf) ?? null);
 
-  async function atualizarMunicipios(falhas) {
-    const alvo = ufs.filter((uf) => uf !== 'zz' && precisaMunicipio(uf));
-    if (!alvo.length || !config.anteriores) return;
+  // Lê os arquivos de todos os municípios (fora o exterior). Serve à abstenção por lado e ao
+  // plano B. Roda no seu próprio intervalo (cerca de 5 min), sem atrasar a leitura dos totais.
+  let lendoMunicipios = false;
+  async function atualizarMunicipios() {
+    if (!config.anteriores || lendoMunicipios) return;
+    lendoMunicipios = true;
+    const falhas = [];
     try {
       if (!listaMun) {
         const cm = await obter(urlMunLista);
         listaMun = new Map(cm.abr.map((a) => [String(a.cd).toLowerCase(), a.mu.map((m) => m.cd)]));
       }
-    } catch (e) { falhas.push(`lista de municípios: ${e.message}`); return; }
-    indiceMun ??= indicePorMunicipio(config.anteriores);
-    for (const uf of alvo) {
-      const arquivos = [];
-      await emParalelo(listaMun.get(uf) ?? [], 8, async (mun) => {
-        try { arquivos.push(lerArquivoTse(await obter(urlMun(uf, mun)))); } catch { /* município pulado nesta rodada */ }
-      });
-      if (arquivos.length) porMunicipio.set(uf, infoPorMunicipio(arquivos, indiceMun, uf));
+      for (const uf of ufs.filter((x) => x !== 'zz')) {
+        const arquivos = [];
+        let perdidos = 0;
+        await emParalelo(listaMun.get(uf) ?? [], 8, async (mun) => {
+          try { arquivos.push(lerArquivoTse(await obter(urlMun(uf, mun)))); } catch { perdidos++; }
+        });
+        if (arquivos.length) {
+          // município que falhou nesta rodada mantém a leitura anterior
+          const antigos = new Map((munsPorUf.get(uf) ?? []).map((m) => [m.uf, m]));
+          for (const m of arquivos) antigos.set(m.uf, m);
+          munsPorUf.set(uf, [...antigos.values()]);
+          porMunicipio.set(uf, infoPorMunicipio(munsPorUf.get(uf), indiceMun, uf));
+        }
+        if (perdidos) falhas.push(`${uf}: ${perdidos} município(s) sem resposta`);
+      }
+    } catch (e) {
+      falhas.push(`lista de municípios: ${e.message}`);
+    } finally {
+      lendoMunicipios = false;
     }
+    avisosMun = falhas;
+    calcular();
   }
   let estado = { erro: 'Primeira leitura em andamento', historico: leituras.todas() };
 
@@ -93,7 +114,6 @@ function criarServidor(config, buscar = fetch) {
         } catch (e) { falhas.push(`${uf} (seções): ${e.message}`); }
       });
     }
-    if (ciclo % 5 === 1) await atualizarMunicipios(falhas); // a cada ~5 min, só UFs que precisam
     avisos = falhas;
     calcular();
   }
@@ -106,11 +126,24 @@ function criarServidor(config, buscar = fetch) {
     const candidatos = config.candidatos === 'todos' ? todosCandidatos.map((c) => c.numero) : config.candidatos;
 
     const infos = new Map(ufsTse.map((u) => [u.uf, infoUf(u.uf)]));
-    const estados = ufsTse.map((u) => estadoUfAoVivo(u, infos.get(u.uf), config.anteriores, candidatos));
+    const estados = ufsTse.map((u) => estadoUfAoVivo(u, infos.get(u.uf), config.anteriores, candidatos, lados));
     const validos = estados.reduce((a, e) => a + e.validos, 0);
+
+    // abstenção por lado (municípios pró-Lula e pró-Flávio), comparando as mesmas seções
+    const abst = config.anteriores
+      ? resumoAbstencao({ muns: munsPorUf, infos, anteriores: config.anteriores, lados, indice: indiceMun, candidatos })
+      : null;
+    for (const e of estados) {
+      if (e.anterior) e.anterior.razaoPorLado = { lula: abst?.porUf[e.uf]?.lula?.razao ?? null, flavio: abst?.porUf[e.uf]?.flavio?.razao ?? null };
+    }
+
     const temAnterior = estados.some((e) => e.anterior && e.anterior.restantes.validos + e.anterior.apuradas.validos > 0);
-    const metodo = config.metodo === 'mudanca' && !temAnterior ? 'pa' : config.metodo;
+    const metodo = config.metodo.startsWith('mudanca') && !temAnterior ? 'pa' : config.metodo;
     const projecao = METODOS[metodo](estados, candidatos);
+    // quanto o ajuste de abstenção por lado mexe no Lula, em p.p.
+    const efeitoLula = metodo === 'mudancaAbstencao' && validos > 0
+      ? projecao.pct['13'] - projetarMudanca(estados, candidatos).pct['13']
+      : null;
 
     const votosAtuais = {};
     for (const c of candidatos) votosAtuais[c] = estados.reduce((a, e) => a + (e.votos[c] ?? 0), 0);
@@ -129,11 +162,14 @@ function criarServidor(config, buscar = fetch) {
       const s = saldoUf(e);
       const base = infos.get(u.uf)?.base === 'municipio' ? 'municipio' : baseUf(u, infos.get(u.uf)?.recebidas ?? new Set());
       const f = (x) => x.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      const sinal = (x) => (x >= 0 ? '+' : '') + f(x);
+      const a = abstencaoUf(u, infos.get(u.uf), config.anteriores);
       const detalhe = s.saldo === null
         ? `${u.uf.toUpperCase()}: aguardando seções apuradas`
         : `${u.uf.toUpperCase()} (${f(u.secoesPct)}% apurado, base: ${base === 'secao' ? 'seções' : 'municípios'})\n` +
-          `Lula: ${f(s.lula1)}% → ${f(s.lula2)}% (${s.lula2 >= s.lula1 ? '+' : ''}${f(s.lula2 - s.lula1)} p.p.)\n` +
-          `Flávio: ${f(s.flavio1)}% → ${f(s.flavio2)}% (${s.flavio2 >= s.flavio1 ? '+' : ''}${f(s.flavio2 - s.flavio1)} p.p.)`;
+          `Lula: ${f(s.lula1)}% → ${f(s.lula2)}% (${sinal(s.lula2 - s.lula1)} p.p.)\n` +
+          `Flávio: ${f(s.flavio1)}% → ${f(s.flavio2)}% (${sinal(s.flavio2 - s.flavio1)} p.p.)` +
+          (a ? `\nAbstenção: ${f(a.abst1)}% → ${f(a.abst2)}% (${sinal(a.abst2 - a.abst1)} p.p.)` : '');
       return { uf: u.uf, base, saldo: s.saldo, detalhe, pctSecoesUf: u.secoesPct, aptosTotal: u.eleitorado, i };
     }).sort((a, b) => b.aptosTotal - a.aptosTotal);
 
@@ -155,7 +191,12 @@ function criarServidor(config, buscar = fetch) {
       historico: leituras.todas(),
       curva: validos > 0 ? curvaRestante(estados, infos, config.anteriores, pctSecoes, projecao, candidatos) : [],
       ufs: linhasUf,
-      avisos,
+      abstencao: abst && {
+        barra: abst.barra, lula: abst.nacional.lula, flavio: abst.nacional.flavio, efeitoLula,
+        origem: origemVotos({ infos, anteriores: config.anteriores, lados }),
+        municipiosLidos: [...munsPorUf.values()].reduce((t, l) => t + l.length, 0),
+      },
+      avisos: [...avisos, ...avisosMun],
       backtest: config.resumoBacktest ?? null,
     };
   }
@@ -179,7 +220,7 @@ function criarServidor(config, buscar = fetch) {
     fs.createReadStream(caminho).pipe(res);
   });
 
-  return { servidor, atualizar, panorama: () => estado };
+  return { servidor, atualizar, atualizarMunicipios, panorama: () => estado };
 }
 
 // Método padrão: o que acertou antes no teste de 2022, com desempate pelo erro médio até 50%
@@ -221,6 +262,15 @@ async function main() {
   };
   await ciclo();
   setInterval(ciclo, 60_000);
+  // municípios: logo após a primeira leitura e depois a cada 5 min (cerca de 5.570 arquivos)
+  const municipios = async () => {
+    const t = Date.now();
+    try { await s.atualizarMunicipios(); } catch (e) { console.log('erro nos municípios:', e.message); }
+    const a = s.panorama().abstencao;
+    console.log(new Date().toLocaleTimeString('pt-BR'), `municípios lidos: ${a?.municipiosLidos ?? 0} em ${Math.round((Date.now() - t) / 1000)} s`);
+  };
+  municipios();
+  setInterval(municipios, 300_000);
 }
 
 if (require.main === module) main();
