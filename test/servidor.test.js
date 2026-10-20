@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { criarServidor } = require('../servidor-2t');
+const { criarServidor, escolherMetodo } = require('../servidor-2t');
 
 // Arquivo "-u.json" mínimo no formato do TSE
 const tse = (abr, v13, v22, hg = '17:30:00', pst = '10,00') => ({
@@ -60,6 +60,16 @@ test('sem votos não mostra projeção', async () => {
     assert.strictEqual(c.pctProjetado, null);
     assert.strictEqual(c.votosProjetados, null);
   }
+});
+
+test('escolhe o método que acerta antes e desempata pelo erro médio até 50%', () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'raiz-'));
+  fs.mkdirSync(path.join(raiz, 'data', 'backtest'), { recursive: true });
+  fs.writeFileSync(path.join(raiz, 'data', 'backtest', '2022-2t.json'), JSON.stringify({ metodos: {
+    pa: { acertoEm: 45, erroMedio: 0.8 }, mudanca: { acertoEm: 1, erroMedio: 0.023 }, mudancaAbstencao: { acertoEm: 1, erroMedio: 0.020 },
+  } }));
+  assert.strictEqual(escolherMetodo(raiz).metodo, 'mudancaAbstencao');
+  assert.strictEqual(escolherMetodo(path.join(raiz, 'nao-existe')).metodo, 'mudancaAbstencao');
 });
 
 test('reinício recupera o histórico sem duplicar pontos', async () => {

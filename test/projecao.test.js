@@ -15,12 +15,13 @@ test('lê o formato do TSE', () => {
   const lido = lerArquivoTse({
     cdabr: 'SP', dg: '04/10/2026', hg: '18:00:00',
     carg: [{ agr: [{ par: [{ sg: 'PX', cand: [{ n: '10', nmu: 'FULANO', vap: '1500' }] }, { sg: 'PY' }] }] }],
-    s: { pst: '12,50' }, e: { te: '1000', est: '125' }, v: { vv: '90' },
+    s: { pst: '12,50' }, e: { te: '1000', est: '125', c: '100' }, v: { vv: '90' },
   });
   assert.deepStrictEqual(lido.candidatos, [{ numero: '10', nome: 'FULANO', partido: 'PX', votos: 1500 }]);
   assert.strictEqual(lido.uf, 'sp');
   assert.strictEqual(lido.secoesPct, 12.5);
   assert.strictEqual(lido.eleitoradoApurado, 125);
+  assert.strictEqual(lido.comparecimento, 100);
 });
 
 test('sem votos: tudo zerado e sem divisão por zero', () => {

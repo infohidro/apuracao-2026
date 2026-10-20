@@ -56,6 +56,25 @@ test('reprisa em ordem de chegada e termina igual ao resultado final', () => {
   }
 });
 
+test('método com abstenção por lado termina no resultado final e separa os lados', () => {
+  const res = reprisar(atuais, anteriores, ['13', '22'], 10);
+  const s = res.metodos.mudancaAbstencao;
+  assert.ok(s, 'método mudancaAbstencao ausente');
+  for (const serie of Object.values(res.metodos)) assert.ok(Number.isFinite(serie.erroMedio), 'erroMedio');
+  const fim = s.pontos.at(-1);
+  for (const c of ['13', '22']) assert.ok(Math.abs(fim.pctProjetado[c] - res.final.pct[c]) < 1e-9);
+  const { ufs } = montarEstados(atuais, new Set(['ac-1', 'sp-3']), anteriores);
+  const sp = ufs.find((u) => u.uf === 'sp');
+  // todos os municípios do teste são '00001'; em SP o 1º turno deu 13 > 22 -> lado Lula
+  assert.ok(sp.anterior.porLado.lula.validos > 0);
+  assert.strictEqual(sp.anterior.porLado.flavio.validos, 0);
+  // restantes por lado somam o restante agregado
+  assert.ok(Math.abs(sp.anterior.porLado.lula.validos - sp.anterior.restantes.validos) < 1e-9);
+  // razão por lado: (válidos 2T / aptos 2T) / (válidos 1T / aptos 1T) nas seções apuradas: (180/200)/(180/200)
+  assert.ok(Math.abs(sp.anterior.razaoPorLado.lula - 1) < 1e-9);
+  assert.strictEqual(sp.anterior.razaoPorLado.flavio, null);
+});
+
 test('sem turno anterior só roda PA', () => {
   const res = reprisar(atuais, null, ['13', '22'], 50);
   assert.ok(res.metodos.pa);

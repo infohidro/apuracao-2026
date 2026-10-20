@@ -10,7 +10,7 @@ const CASOS = {
   '2022-2t': { atuais: '2022-2t', anteriores: '2022-1t', candidatos: ['13', '22'], titulo: '2º turno de 2022' },
   '2026-1t': { atuais: '2026-1t', anteriores: null, candidatos: null, titulo: '1º turno de 2026' },
 };
-const NOMES = { pa: 'Progressão aritmética', mudanca: 'Mudança sobre o 1º turno' };
+const NOMES = { pa: 'Progressão aritmética', mudanca: 'Mudança sobre o 1º turno', mudancaAbstencao: 'Mudança + abstenção por município' };
 
 async function main() {
   const caso = process.argv[2];

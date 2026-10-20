@@ -182,14 +182,16 @@ function criarServidor(config, buscar = fetch) {
   return { servidor, atualizar, panorama: () => estado };
 }
 
-// Método padrão: o que acertou antes no teste de 2022; sem teste, "mudanca".
+// Método padrão: o que acertou antes no teste de 2022, com desempate pelo erro médio até 50%
+// apurado. Sem o teste rodado, "mudancaAbstencao" (o que venceu o teste em 20/10/2026).
 function escolherMetodo(raiz) {
   try {
     const b = JSON.parse(fs.readFileSync(path.join(raiz, 'data', 'backtest', '2022-2t.json'), 'utf8'));
-    const ordem = Object.entries(b.metodos).sort((x, y) => (x[1].acertoEm ?? Infinity) - (y[1].acertoEm ?? Infinity));
+    const ordem = Object.entries(b.metodos).sort((x, y) =>
+      (x[1].acertoEm ?? Infinity) - (y[1].acertoEm ?? Infinity) || (x[1].erroMedio ?? Infinity) - (y[1].erroMedio ?? Infinity));
     return { metodo: ordem[0][0], resumo: Object.fromEntries(Object.entries(b.metodos).map(([m, s]) => [m, s.acertoEm])) };
   } catch {
-    return { metodo: 'mudanca', resumo: null };
+    return { metodo: 'mudancaAbstencao', resumo: null };
   }
 }
 

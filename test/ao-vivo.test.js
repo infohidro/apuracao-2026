@@ -59,6 +59,16 @@ test('tamanho do restante segue a fração apurada do TSE, mesmo sem seções ma
   assert.ok(Math.abs(e2.anterior.restantes.validos - 100) < 1e-9, String(e2.anterior.restantes.validos));
 });
 
+test('restante separado por lado do município, somando o restante total', () => {
+  const r = secoesRecebidas(CS).get('ac');
+  // a seção 0079 (restante) é do município 01066; marcado como pró-Lula
+  const lados = new Map([['ac-01066', 'lula']]);
+  const e = estadoUfAoVivo(ufTse(48, 52, 300, 150), r, ANTERIORES, ['13', '22'], lados);
+  assert.ok(Math.abs(e.anterior.porLado.lula.validos - e.anterior.restantes.validos) < 1e-9);
+  assert.strictEqual(e.anterior.porLado.flavio.validos, 0);
+  assert.ok(Math.abs(e.anterior.porLado.lula.votos['13'] - e.anterior.restantes.votos['13']) < 1e-9);
+});
+
 test('base da UF', () => {
   assert.strictEqual(baseUf(ufTse(10, 10), new Set()), 'municipio');
   assert.strictEqual(baseUf(ufTse(0, 0), new Set()), 'aguardando');

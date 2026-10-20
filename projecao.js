@@ -23,6 +23,7 @@ function lerArquivoTse(j) {
     eleitorado: num(j.e?.te),
     eleitoradoApurado: num(j.e?.est),
     validos: num(j.v?.vv),
+    comparecimento: num(j.e?.c),
     candidatos,
   };
 }

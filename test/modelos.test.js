@@ -62,6 +62,29 @@ test('mudança: UF sem dados do turno anterior ainda projeta o restante (como PA
   perto(p.votos['22'], 52 + 200 * 0.32 + 100 + 500 * 0.8 * 0.25);
 });
 
+test('mudança com abstenção por lado: cada lado usa a sua razão de comparecimento', () => {
+  const u = ufMudanca();
+  u.anterior.porLado = {
+    lula: { validos: 100, votos: { 13: 60, 22: 30, 30: 10 } },
+    flavio: { validos: 100, votos: { 13: 20, 22: 70, 30: 10 } },
+  };
+  u.anterior.razaoPorLado = { lula: 0.8, flavio: 1.0 };
+  const com = projetarMudanca([u], C, { porLado: true });
+  perto(com.votos['13'], 48 + 80 * 0.68 + 100 * 0.28);
+  perto(com.votos['22'], 52 + 80 * 0.32 + 100 * 0.72);
+  // sem a opção, ignora os lados e usa o restante agregado (comportamento anterior)
+  const sem = projetarMudanca([u], C);
+  perto(sem.votos['13'], 48 + 200 * 0.68);
+});
+
+test('abstenção por lado: lado sem razão medida usa a razão da UF', () => {
+  const u = ufMudanca();
+  u.anterior.porLado = { lula: { validos: 200, votos: { 13: 120, 22: 60, 30: 20 } }, flavio: { validos: 0, votos: {} } };
+  u.anterior.razaoPorLado = { lula: null, flavio: 0.5 };
+  const p = projetarMudanca([u], C, { porLado: true });
+  perto(p.votos['13'], 48 + 200 * 0.68); // razão da UF = 100/100 = 1
+});
+
 test('mudança sem turno anterior lança erro', () => {
   assert.throws(() => projetarMudanca([{ uf: 'sp', aptosTotal: 1, aptosApurados: 0, validos: 0, votos: {}, anterior: null }], C),
     /mudança exige turno anterior/);
